@@ -1,0 +1,335 @@
+<!doctype hmtl><html><head><title>debug loading</title>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"/>
+<script type="text/javascript">
+
+var pageName = 'index';
+
+function qparams () {
+	var match,
+        pl     = /\+/g,  // Regex for replacing addition symbol with a space
+        search = /([^&=]+)=?([^&]*)/g,
+        decode = function (s) { return decodeURIComponent(s.replace(pl, " ")); },
+        query  = window.location.search.substring(1);
+
+    var urlParams = {};
+    while (match = search.exec(query))
+       urlParams[decode(match[1])] = decode(match[2]);
+
+	return urlParams;
+}
+
+var q = qparams();
+if(q.page) {
+	pageName = q.page;
+}
+
+
+var onLoad = null, isContentLoaded = false
+function pageLoaded() {
+    console.log('pageLoaded')
+	isContentLoaded = true
+	if(onLoad) {
+		onLoad()
+	}
+}
+
+document.addEventListener("DOMContentLoaded", pageLoaded, false);
+
+(function() {
+
+var template2function = null, debugModule = null, configModule = null;
+var preFileMap = { }
+
+function Module(path, index, mn) {
+	this.mn = mn;
+	this.path = path;
+	this.modulesMap = {};
+	this.files = {};
+	this.exports = {};
+	this.index = index ? index : 'index.js';
+}
+
+function require(module) {
+
+	console.log('require ' + module + ' from ' + this.path);
+
+	if(module in this.files) {
+		return this.files[module].exports;
+	}
+
+	if(module in this.modulesMap) {
+		module = this.modulesMap[module];
+		module = modules[module.name][module.version];
+		module.getConfig();
+		module.getCode();
+		return module.exports;
+	}
+
+	if(module.length > 3 && module.substr(-3) === '.ts') {
+	    var p = this.mn + '/' + module;
+		console.log('load ts ' + p);
+		// console.log(this)
+
+	    var filepath = '/pre/' + p;
+	    filepath = filepath.substr(0, filepath.length - 2) + 'js';
+		console.log('getCode ' + filepath);
+
+		var content = loadFile(filepath);
+		var file = { exports: { } };
+		var code = eval( '(function(module, require) {\n"use strict"\n\n// ' + filepath + '\n\n' + content + '\n})' );
+		code(file, require.bind(this));
+
+		this.files[module] = file // { exports: code(this, require.bind(this)) }
+		return file.exports;
+
+		// return null
+	}
+
+	if(module.length > 5 && module.substr(-5) === '.html') {
+
+		var content = loadFile(this.path + '/' + module + '?r=' + ('' + Math.random()).substr(2));
+		var template = template2function.compile(content);
+		// console.log(template)
+		this.files[module] = { exports: template }
+		return template;
+	}
+
+	if(module.length > 3 && module.substr(-3) === '.js') {
+
+	    var filepath = this.path + '/' + module;
+		console.log('getCode ' + filepath);
+
+		var content = loadFile(filepath);
+		var file = { exports: { } };
+		var code = eval( '(function(module, require) {\n"use strict"\n\n// ' + filepath + '\n\n' + content + '\n})' );
+		code(file, require.bind(this));
+
+		this.files[module] = file // { exports: code(this, require.bind(this)) }
+		return file.exports;
+	}
+
+	return null;
+}
+
+Module.prototype = {
+
+	getConfig: function() {
+
+		if(this.config) {
+			return this.config;
+		}
+
+		console.log('load config ' + this.path + '/module.json')
+		this.config = JSON.parse(loadFile(this.path + '/module.json'));
+		if(this.config.use) {
+			makeModulesMap(this, this.config.use.split(','));
+		}
+
+
+		return this.config;
+
+	},
+
+    getDepModules: function() {
+
+   		this.getConfig();
+    	var dep = { };
+    	for(var name in this.modulesMap) {
+    		var item = this.modulesMap[name];
+    		var key = item.name + '|' + item.version;
+    		dep[key] = item;
+
+    		var m = modules[item.name][item.version];
+
+    		var mdep = m.getDepModules();
+    		for(n in mdep) {
+    			dep[n] = mdep[n];
+    		}
+    	}
+
+    	return dep;
+    },
+
+	getCode: function() {
+
+		if(this.code) return
+
+	    // console.log(this)
+	    var p = this.path + '/index.js';
+
+		var r = this.mn + '/index.js';
+		if(r in preFileMap) {
+			p = '/pre/' + r;
+		}
+		console.log('getCode ' + p);
+
+		var content = loadFile(p);
+		this.files['index.js'] = this;
+
+		this.code = eval( '(function(module, require) {\n"use strict"\n\n// ' + this.path + '/index.js\n\n' + content + '\n})' );
+
+		this.code(this, require.bind(this));
+	}
+}
+
+// load modules list
+
+function loadFile(file) {
+
+	var r = new XMLHttpRequest();
+	r.open('GET', file, false);
+	r.send(null);
+	if (r.status === 200) {
+		return r.responseText;
+	}
+
+	return null
+
+}
+
+preFileMap = JSON.parse(loadFile('/pre/filesMap.json'))
+console.log(preFileMap)
+
+var repositories = JSON.parse(loadFile('/repositories/list.json'));
+var modules = window.modules = { }
+for(var i = 0, l = repositories.length; i < l; i++) {
+	var r = repositories[i];
+	var list = JSON.parse(loadFile('/repositories/' + r + '/list.json'))
+	// console.log(list)
+	for(var moduleName in list) {
+		if(!(moduleName in modules)) {
+			modules[moduleName] = { }
+		}
+		var m = modules[moduleName];
+		for(var i1 = 0, c1 = list[moduleName], l1 = c1.length; i1 < l1; i1++) {
+			var v = c1[i1];
+			m[v] = new Module('/repositories/' + r + '/' + moduleName + '/' + v, null, moduleName + '/' + v); // { modulesMap: { }, path: '/repositories/' + r + '/' + moduleName + '/' + v };
+		}
+	}
+}
+
+function makeModulesMap(module_, list) {
+
+    // var list = use.split(',');
+
+	for(var i = 0, l = list.length; i < l; i++) {
+		var p = list[i].split('|'), moduleName = p[0];
+		p = p[1].split('.')
+		var majorVersion = p[0], minorVersion = p[1];
+		// search module
+
+		if(!(moduleName in modules)) {
+			console.log('can\'t find module ' + moduleName + ' with version ' + majorVersion + '.' + minorVersion);
+			break;
+		}
+
+		var moduleVersions = modules[moduleName];
+		if(minorVersion === '*') {
+			// let's find maximum verion
+			var maxVersion = null
+			for(var version in moduleVersions) {
+				p = version.split('.');
+				if(p[0] === majorVersion) {
+					if(maxVersion === null || maxVersion < parseInt(p[1])) {
+						maxVersion = parseInt(p[1]);
+					}
+				}
+			}
+			if(maxVersion === null) {
+				console.log('can\'t find module ' + moduleName + ' with version ' + majorVersion + '.' + minorVersion);
+				break;
+			}
+			var module = moduleVersions[majorVersion + '.' + maxVersion];
+			console.log('install module ' + moduleName + ' with version ' + majorVersion + '.' + maxVersion + ', path = ' + module.path );
+
+			module_.modulesMap[moduleName] = { version: majorVersion + '.' + maxVersion, name: moduleName };
+
+		}
+	}
+
+	module_.modulesMap.config = { version: '1.0', name: 'config' };
+}
+
+configModule = new Module('/', 'project.json');
+configModule.config = { };
+configModule.code = true;
+configModule.exports = JSON.parse(loadFile('/project.json')).config;
+
+modules['config'] = { '1.0': configModule };
+
+debugModule = new Module('debug/core');
+makeModulesMap(debugModule, [ "template2function|1.*" ]);
+template2function = require.bind(debugModule)('template2function');
+
+modules['page/' + pageName] = { '1.0': new Module('/pages/' + pageName) };
+var page = modules['page/' + pageName]['1.0'];
+var pageConfig = page.config = JSON.parse(loadFile(modules['page/' + pageName]['1.0'].path + '/page.json'));
+document.title = pageConfig.title;
+page.isPage = true;
+
+makeModulesMap(page, pageConfig.use ? ( 'string' === typeof pageConfig.use ? pageConfig.use.split(',') : pageConfig.use) : []);
+
+// make dep modules
+var dep = page.getDepModules();
+dep['page/' + pageName + '|1.0'] = { name: 'page/' + pageName, version: '1.0' };
+// console.log(dep);
+
+// load css
+for(var key in dep) {
+	var item = dep[key], module = modules[item.name][item.version], config = module.getConfig();
+
+    if(config.debug && config.debug.css) {
+    	for(var i = 0, c = config.debug.css, l = c.length; i < l; i++) {
+
+    		var path = module.path + '/' + c[i];
+    		console.log('load css ' + path);
+    		var cssContent = loadFile(path);
+
+			var styleNode = document.createElement('style');
+			styleNode.setAttribute('source', path);
+			styleNode.type = "text/css";
+			styleNode.appendChild(document.createTextNode(cssContent));
+		   	document.querySelector('head').appendChild(styleNode);
+
+    	}
+    }	
+
+    if(config.rawJS) {
+
+        for(var i = 0, c = config.rawJS, l = c.length; i < l; i++) {
+        	
+			var head = document.getElementsByTagName('head')[0];
+			var script = document.createElement('script');
+			script.type = 'text/javascript';
+			// script.src = module.path + '/' + c[i];
+			script.text = loadFile(module.path + '/' + c[i]);
+			console.log('raw js ' + module.path + '/' + c[i]);
+
+		    head.appendChild(script);    	
+		    
+
+		    /*
+			console.log('raw js ' + module.path + '/' + c[i]);
+		    var content = loadFile(module.path + '/' + c[i]);
+		    eval(content)
+		    */
+		}
+    }
+}
+
+page.getCode();
+
+})()
+
+onLoad = function() {
+    console.log('onLoad')
+    modules['page/' + pageName]['1.0'].exports();
+}
+
+if(isContentLoaded) {
+	onLoad()
+}
+
+</script>
+
+</head><body /></html>
