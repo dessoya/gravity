@@ -155,7 +155,7 @@ function processGenerators(C) {
 	for (let key of Object.getOwnPropertyNames(p)) {
     	var method = p[key]
      	if('function' === typeof method && method.constructor == sampleGenerator.constructor) {
-      		console.log('dynamic method ' + key)
+      		// console.log('dynamic method ' + key)
    			p[key] = coroutine.method(method)
 		}
 	}
@@ -163,7 +163,7 @@ function processGenerators(C) {
 	for (let key of Object.getOwnPropertyNames(C)) {
     	var method = C[key]
     	if('function' === typeof method && method.constructor == sampleGenerator.constructor) {
-    		console.log('static method ' + key)
+    		// console.log('static method ' + key)
    			C[key] = coroutine(method)
     	}
 	}

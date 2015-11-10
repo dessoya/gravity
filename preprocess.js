@@ -134,12 +134,30 @@ class Module {
 		var src = item.path
 		var dst = config.data + '/' + self.name + '/' + self.version + '/' + item.relative
 
+		var js = dst.substr(0, dst.length - 3)
+		js += '.js'
+		self.fileMap[js.substr(config.data.length + 1)] = { }
+
 		var ssrc = yield fs.stat(src, g.resume)
-		var sdst = yield fs.stat(dst, g.resume)
+		if((yield fs.exists(dst, g.resumeWithError))[0]) {
+			var sdst = yield fs.stat(dst, g.resume)
 
-		console.log(Math.floor(ssrc.mtime.getTime() / 1000))
-		console.log(Math.floor(sdst.mtime.getTime() / 1000))
+			// console.log(Math.floor(ssrc.mtime.getTime() / 1000))
+			// console.log(Math.floor(sdst.mtime.getTime() / 1000))
 
+			if(Math.floor(ssrc.mtime.getTime() / 1000) === Math.floor(sdst.mtime.getTime() / 1000)) {
+
+				var a, content = '' + (yield fs.readFile(js, g.resume))
+				if(a = reClass.exec(content)) {
+					// console.log(a)
+					var lastClassName = a[1]
+					self.classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
+				}
+
+				console.log('skip ' + item.relative + ' not modified')
+				return
+			}
+		}
 
 		// 
 		console.log('process ' + item.relative)
@@ -159,7 +177,7 @@ class Module {
 			for(var i10 = 0, l10 = dfiles.length; i10 < l10; i10++) {
 				var ditem = dfiles[i10]
 				if(ditem.path.substr(-5) !== '.d.ts') continue
-				console.log(ditem.path)
+				// console.log(ditem.path)
 				tsc = '/// <reference path="' + ditem.path + '" />\n' + tsc
 			}
 		}
@@ -171,8 +189,7 @@ class Module {
 		}
 
 		yield fs.writeFile(filePath, tsc, g.resume)
-		console.log(filePath.replace(/\\/g, '/'))
-		yield fs.utimes(filePath.replace(/\\/g, '/'), Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
+		yield fs.utimes(filePath, Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
 
 
 
@@ -185,8 +202,6 @@ class Module {
 		if(r[1].length) console.log('stderr\n', r[1])
 
 		// make .js
-		var js = filePath.substr(0, filePath.length - 3)
-		js += '.js'
 
 		r = yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '--out', js ], g.resume)
 		if(r[0].length) console.log('stdout\n', r[0])
@@ -270,6 +285,8 @@ class Module {
 				g.resume)
 		}
 
+		console.log('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
+
 		self.classMap = [ ]
 		for(var i = 0, c = self.tsorder, l = c.length; i < l; i++) {
 			yield self.processts(c[i], g.resume)
@@ -281,8 +298,6 @@ class Module {
 		self.fileMap[ip.substr(config.data.length + 1)] = { }
 		yield fs.writeFile(ip, index, g.resume)
 
-
-		console.log('process ' + self.name + ' ' + self.version)
 		// console.log(self.tsorder)
 
 		self.setProcessed()
@@ -377,7 +392,7 @@ var gen_main = coroutine(function*(g) {
     		}
     	}
     }
-    console.log(config)
+    // console.log(config)
 
     // -------------------------------------------------------
     for(var i = 0, l = modules.length; i < l; i++) {
