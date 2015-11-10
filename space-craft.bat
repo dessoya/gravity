@@ -1,1 +1,1 @@
-node ./glite_debug.js -config home-win-config.json -project C:\zh\space-craft-client
+node ./glite_debug.js -config work-win-config.json -project C:\zh\space-craft-client

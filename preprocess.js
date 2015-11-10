@@ -8,6 +8,7 @@ var coroutine		= require('coroutine')
   , errors			= require('errors')
   , fs				= require('fs')
   , utils			= require(glite_path + '/utils.js')
+  , util			= require('util')
   , os				= require('os')
 
 var config = {
@@ -19,6 +20,7 @@ var reClass = /class\s+(\S+)/m
 var reUse = /\/\/\s+use\:\s+(\S+)/mg
 
 function getDepModules(moduleConfig) {
+
 	var dep = { }
 
 	if(moduleConfig.use) {
@@ -32,227 +34,299 @@ function getDepModules(moduleConfig) {
 	return dep
 }
 
-var gen_processModule = coroutine(function*(g) {
+var gen_makeOrder = coroutine(function*(list, gen_makeDep, itemKeyMaker, g) {
 
+	var order = [ ], done = { }, flag = true
+	while(flag) {
+		flag = false
+		for(var i1 = 0, l1 = list.length; i1 < l1; i1++) {
+			var item = list[i1]
+			if(item.done) continue
+
+			if(!item.dep) {
+				item.dep = yield gen_makeDep(item, g.resume)
+			}
+
+			var all_dep = true
+			for(var i2 = 0, c2 = item.dep, l2 = c2.length; i2 < l2; i2++) {
+				var dep = c2[i2]
+				if(dep in done) continue
+				all_dep = false
+				break
+			}
+
+			if(!all_dep) continue
+
+			item.done = true
+			done[itemKeyMaker(item)] = true
+			order.push(item)
+
+			flag = true
+		}
+	}
+
+	return order
 })
+
+var processedModules = { }
+
+class Module {
+
+	constructor(path, name, version) {
+		this.name = name
+		this.version = version
+		this.path = path
+
+		this.fileMap = { }
+	}
+
+	*readFiles(self, g) {
+
+		var files = yield utils.scan(self.path + '/' + self.name + '/' + self.version, g.resume)
+		var ts = self.ts = [ ]
+		for(var i1 = 0, l1 = files.length; i1 < l1; i1++) {
+			var item = files[i1]
+			if(item.wc === 'ts') {
+				ts.push(item)
+			}
+		}
+	}
+
+	setProcessed() {
+
+		if(!(this.name in processedModules)) {
+			processedModules[this.name] = { }
+		}
+		processedModules[this.name][this.version.substr(0,1)] = true
+
+		this.processed = true
+	}
+
+	checkDep() {
+
+		var alldep = true
+		for(var dname in this.depModules) {
+			if(!(dname in processedModules && this.depModules[dname] in processedModules[dname])) {
+				alldep = false
+				break
+			}				
+		}
+
+		return alldep
+	}
+
+	static *tsIdemDepMaker(item, g) {
+
+		var dep = item.dep = [ ]
+
+		var a, tsc = '' + (yield fs.readFile(item.path, g.resume))
+		reUse.lastIndex = 0
+		while(a = reUse.exec(tsc)) {
+			dep.push(a[1])
+		}
+
+		return dep
+	}
+
+	*processts(self, item, g) {
+
+		// check for modified
+		var src = item.path
+		var dst = config.data + '/' + self.name + '/' + self.version + '/' + item.relative
+
+		var ssrc = yield fs.stat(src, g.resume)
+		var sdst = yield fs.stat(dst, g.resume)
+
+		console.log(ssrc.mtime.getTime())
+		console.log(sdst.mtime.getTime())
+
+
+		// 
+		console.log('process ' + item.relative)
+
+		var filePath = config.data + '/' + self.name + '/' + self.version + '/' + item.relative
+		yield utils.makePathForFile(filePath, g.resume)
+
+		var tsc = '' + (yield fs.readFile(item.path, g.resume))
+		tsc = 'module ' + self.name + '{\n' + tsc + '\n}'
+		// make .d.ts refs
+		/// <reference path="/var/lib/gravity/modulePreprocess/pluginManager/3.0/Manager.d.ts" />
+		for(var dname in self.depModules) {
+			var dver = self.depModules[dname]
+			// read all .d.ts
+			var dfiles = yield utils.scan(config.data + '/' + dname + '/' + dver + '.0', g.resume)
+			// console.log(dfiles)
+			for(var i10 = 0, l10 = dfiles.length; i10 < l10; i10++) {
+				var ditem = dfiles[i10]
+				if(ditem.path.substr(-5) !== '.d.ts') continue
+				console.log(ditem.path)
+				tsc = '/// <reference path="' + ditem.path + '" />\n' + tsc
+			}
+		}
+
+		for(var i = 0, c = item.dep, l = c.length; i < l; i++) {			
+			var f = c[i]
+			f = f.substr(0, f.length - 2) + 'd.ts'
+			tsc = '/// <reference path="./' + f + '" />\n' + tsc
+		}
+
+		yield fs.writeFile(filePath, tsc, g.resume)
+		console.log(filePath)
+		yield fs.utimes(filePath, ssrc.mtime.getTime(), ssrc.mtime.getTime(), g.resume)
+
+
+
+		// make .d.ts
+		var dts = filePath.substr(0, filePath.length - 3)
+		dts += '.d.ts'
+
+		var r = yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '-d', '--out', dts ], g.resume)
+		if(r[0].length) console.log('stdout\n', r[0])
+		if(r[1].length) console.log('stderr\n', r[1])
+
+		// make .js
+		var js = filePath.substr(0, filePath.length - 3)
+		js += '.js'
+
+		r = yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '--out', js ], g.resume)
+		if(r[0].length) console.log('stdout\n', r[0])
+		if(r[1].length) console.log('stderr\n', r[1])
+
+		self.fileMap[js.substr(config.data.length + 1)] = { }
+
+
+		var content = '' + (yield fs.readFile(js, g.resume)), a
+		var lines = content.split('\n')
+		var res = [ ]
+		for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
+			var line = lines[i2]
+			if(line.substr(0,3) === '///') {
+				continue
+			}
+			res.push(line)
+		}
+		lines = res
+
+        res = [ ]
+		lines.shift(); lines.shift(); lines.pop(); lines.pop();
+		for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
+			var line = lines[i2]
+			if(line.indexOf(self.name + '.') !== -1) {
+				continue
+			}
+			line = line.substr(4)
+			res.push(line)
+		}
+		content = res.join('\n')
+
+		content = '\n' + content
+
+		for(var dname in self.depModules) {
+			content = 'var '+dname+' = require("'+dname+'")\n' + content
+		}
+
+
+		if(a = reClass.exec(content)) {
+			// console.log(a)
+			var lastClassName = a[1]
+			self.classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
+			content += '\n\nmodule.exports = ' + a[1]
+		}
+		yield fs.writeFile(js, content, g.resume)
+
+	}
+
+	*process(self, g) {
+
+		if(self.processed) {
+			return false
+		}
+
+		if(!self.ts) {
+			yield self.readFiles(g.resume)
+		}
+
+		if(self.ts.length === 0) {			
+			self.setProcessed()
+			return false
+		}
+
+		if(!self.config) {
+			self.config = JSON.parse('' + (yield fs.readFile(self.path + '/' + self.name + '/' + self.version + '/module.json', g.resume)))
+			self.depModules = getDepModules(self.config)
+		}
+
+		if(!self.checkDep()) {
+			return false
+		}
+
+		if(!self.tsorder) {
+			self.tsorder = yield gen_makeOrder(
+				self.ts,
+				Module.tsIdemDepMaker,
+				function(item) {
+					return item.relative
+				},
+				g.resume)
+		}
+
+		self.classMap = [ ]
+		for(var i = 0, c = self.tsorder, l = c.length; i < l; i++) {
+			yield self.processts(c[i], g.resume)
+		}
+
+		// create index.js
+		var index = 'module.exports = {\n' + self.classMap.join(',\n') + '\n}' // require("' + item.relative + '")'
+		var ip = config.data + '/' + self.name + '/' + self.version + '/index.js'
+		self.fileMap[ip.substr(config.data.length + 1)] = { }
+		yield fs.writeFile(ip, index, g.resume)
+
+
+		console.log('process ' + self.name + ' ' + self.version)
+		// console.log(self.tsorder)
+
+		self.setProcessed()
+		return true
+	}
+
+}
+
+for(var i = 0, c = [ Module ], l = c.length; i < l; i ++)
+	utils.processGenerators(c[i])
 
 var gen_processPath = coroutine(function*(path, g) {
 
 	console.log('process modules in ' + path)
 
-	// 1. read list
 	var list = JSON.parse('' + (yield fs.readFile(path + '/list.json', g.resume)))
 	var modulesList = [ ]
 	for(var name in list) {
 		var vlist = list[name]
 		for(var i = 0, l = vlist.length; i < l; i++) {
-			modulesList.push({ name: name, version: vlist[i] })
+			modulesList.push(new Module(path, name, vlist[i]))
 		}
 	}
 
-	/*
-	modulesList
-	[ { name: 'class', version: '1.0' },
-	  { name: 'coroutine', version: '1.0' },
-	*/
-
-	var fileMap = { }
-	
-	var processedModules = { }
 	var flag = true
 	while(flag) {
 		flag = false
 		for(var i = 0, l = modulesList.length; i < l; i++) {
-			var moduleInfo = modulesList[i]
-			if(moduleInfo.processed) continue
-
-			var files = yield utils.scan(path + '/' + moduleInfo.name + '/' + moduleInfo.version, g.resume)
-			var ts = [ ]
-			for(var i1 = 0, l1 = files.length; i1 < l1; i1++) {
-				var item = files[i1]
-				if(item.wc === 'ts') {
-					ts.push(item)
-				}
+			var module = modulesList[i]
+			var result = yield module.process(g.resume)
+			if(result && !flag) {
+				flag = true
 			}
-
-			if(ts.length === 0) {
-
-				if(!(moduleInfo.name in processedModules)) {
-					processedModules[moduleInfo.name] = { }
-				}
-				processedModules[moduleInfo.name][moduleInfo.version.substr(0,1)] = true
-
-				moduleInfo.processed = true
-				continue
-			}
-
-			console.log('module ' + moduleInfo.name + '/' + moduleInfo.version + ' have ts')
-
-			var moduleConfig = JSON.parse('' + (yield fs.readFile(path + '/' + moduleInfo.name + '/' + moduleInfo.version + '/module.json', g.resume)))
-			var depModules = getDepModules(moduleConfig)
-			console.log(depModules)
-			var alldep = true
-			for(var dname in depModules) {
-				if(!(dname in processedModules && depModules[dname] in processedModules[dname])) {
-					alldep = false
-					break
-				}				
-			}
-
-			if(!alldep) {
-				continue
-			}
-
-
-			var lastClassName = null, classMap = []
-
-			var tsorder = [ ], tsdone = { }
-			
-			var fd_flag = true
-			while(fd_flag) {
-				fd_flag = false
-				for(var i1 = 0, l1 = ts.length; i1 < l1; i1++) {
-					var item = ts[i1]
-					if(item.done) continue
-
-					if(!item.dep) {
-						var tsc = '' + (yield fs.readFile(item.path, g.resume))
-						var a, dep = item.dep = [ ] 
-						reUse.lastIndex = 0
-						while(a = reUse.exec(tsc)) {
-							dep.push(a[1])
-						}
-					}
-
-					var all_dep = true
-					for(var i2 = 0, c2 = item.dep, l2 = c2.length; i2 < l2; i2++) {
-						var dep = c2[i2]
-						if(dep in tsdone) continue
-						all_dep = false
-						break
-					}
-
-					if(!all_dep) continue
-
-					item.done = true
-					tsdone[item.relative] = true
-					tsorder.push(item)
-
-					fd_flag = true
-				}
-			}
-
-			console.log(tsorder)
-
-			for(var i1 = 0, l1 = ts.length; i1 < l1; i1++) {
-				var item = ts[i1]
-				console.log('process ' + item.relative)
-
-				var filePath = config.data + '/' + moduleInfo.name + '/' + moduleInfo.version + '/' + item.relative
-				// console.log(filePath)
-				yield utils.makePathForFile(filePath, g.resume)
-
-				var tsc = '' + (yield fs.readFile(item.path, g.resume))
-				tsc = 'module ' + moduleInfo.name + '{\n' + tsc + '\n}'
-				// make .d.ts refs
-				/// <reference path="/var/lib/gravity/modulePreprocess/pluginManager/3.0/Manager.d.ts" />
-				for(var dname in depModules) {
-					var dver = depModules[dname]
-					// read all .d.ts
-					var dfiles = yield utils.scan(config.data + '/' + dname + '/' + dver + '.0', g.resume)
-					// console.log(dfiles)
-					for(var i10 = 0, l10 = dfiles.length; i10 < l10; i10++) {
-						var ditem = dfiles[i10]
-						if(ditem.path.substr(-5) !== '.d.ts') continue
-
-						console.log(ditem.path)
-
-						tsc = '/// <reference path="' + ditem.path + '" />\n' + tsc
-					}
-
-				}
-
-
-				yield fs.writeFile(filePath, tsc, g.resume)
-
-				// make .d.ts
-				var dts = filePath.substr(0, filePath.length - 3)
-				dts += '.d.ts'
-
-				console.log(yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '-d', '--out', dts ], g.resume))
-
-				// make .js
-				var js = filePath.substr(0, filePath.length - 3)
-				js += '.js'
-
-				console.log(yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '--out', js ], g.resume))
-
-				fileMap[js.substr(config.data.length + 1)] = { }
-
-				var content = '' + (yield fs.readFile(js, g.resume)), a
-				var lines = content.split('\n')
-				var res = [ ]
-				for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
-					var line = lines[i2]
-					if(line.substr(0,3) === '///') {
-						continue
-					}
-					res.push(line)
-				}
-				lines = res
-		
-		        res = [ ]
-				lines.shift(); lines.shift(); lines.pop(); lines.pop();
-				for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
-					var line = lines[i2]
-					if(line.indexOf(moduleInfo.name + '.') !== -1) {
-						continue
-					}
-					line = line.substr(4)
-					res.push(line)
-				}
-				content = res.join('\n')
-
-				content = '\n' + content
-
-				for(var dname in depModules) {
-					content = 'var '+dname+' = require("'+dname+'")\n' + content
-				}
-
-
-				if(a = reClass.exec(content)) {
-					// console.log(a)
-					lastClassName = a[1]
-					classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
-					content += '\n\nmodule.exports = ' + a[1]
-				}
-				yield fs.writeFile(js, content, g.resume)
-			}
-
-			// create index.js
-			var index = 'module.exports = {\n' + classMap.join(',\n') + '\n}' // require("' + item.relative + '")'
-			var ip = config.data + '/' + moduleInfo.name + '/' + moduleInfo.version + '/index.js'
-			fileMap[ip.substr(config.data.length + 1)] = { }
-			yield fs.writeFile(ip, index, g.resume)
-
-			if(!(moduleInfo.name in processedModules)) {
-				processedModules[moduleInfo.name] = { }
-			}
-			processedModules[moduleInfo.name][moduleInfo.version.substr(0,1)] = true
-
-			moduleInfo.processed = true
-
-			flag = true
 		}
-
 	}
 
-	// console.log(fileMap)
-	// console.log(processedModules)
+	// console.log(util.inspect(modulesList, {depth: null}))
+
+	var fileMap = { }	
+	for(var i = 0, l = modulesList.length; i < l; i++) {
+		var module = modulesList[i]
+		utils.mergeMaps(fileMap, module.fileMap)
+	}
 	yield fs.writeFile(config.data + '/filesMap.json', JSON.stringify(fileMap), g.resume)
-
-	// console.log(modulesList)
-
 
 })
 

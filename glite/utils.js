@@ -147,6 +147,28 @@ function classicExec(cmd, argv, callback) {
 	})
 }
 
+var sampleGenerator = function*() {};
+
+function processGenerators(C) {
+
+    var p = C.prototype
+	for (let key of Object.getOwnPropertyNames(p)) {
+    	var method = p[key]
+     	if('function' === typeof method && method.constructor == sampleGenerator.constructor) {
+      		console.log('dynamic method ' + key)
+   			p[key] = coroutine.method(method)
+		}
+	}
+
+	for (let key of Object.getOwnPropertyNames(C)) {
+    	var method = C[key]
+    	if('function' === typeof method && method.constructor == sampleGenerator.constructor) {
+    		console.log('static method ' + key)
+   			C[key] = coroutine(method)
+    	}
+	}
+}
+ 
 
 module.exports = {
 	classicExec:		classicExec,
@@ -158,4 +180,6 @@ module.exports = {
 
 	arrayToMap:			arrayToMap,
 	mergeMaps:			mergeMaps,
+
+	processGenerators:  processGenerators,
 }

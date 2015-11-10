@@ -1,1 +1,1 @@
-node preprocess.js -config home-win-config.json -modules C:\zh\gravity-modules-ts 
+node preprocess.js -config work-win-config.json -modules C:\zh\gravity-modules-ts 
