@@ -137,8 +137,8 @@ class Module {
 		var ssrc = yield fs.stat(src, g.resume)
 		var sdst = yield fs.stat(dst, g.resume)
 
-		console.log(ssrc.mtime.getTime())
-		console.log(sdst.mtime.getTime())
+		console.log(Math.floor(ssrc.mtime.getTime() / 1000))
+		console.log(Math.floor(sdst.mtime.getTime() / 1000))
 
 
 		// 
@@ -171,8 +171,8 @@ class Module {
 		}
 
 		yield fs.writeFile(filePath, tsc, g.resume)
-		console.log(filePath)
-		yield fs.utimes(filePath, ssrc.mtime.getTime(), ssrc.mtime.getTime(), g.resume)
+		console.log(filePath.replace(/\\/g, '/'))
+		yield fs.utimes(filePath.replace(/\\/g, '/'), Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
 
 
 
