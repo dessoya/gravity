@@ -16,6 +16,7 @@ var config = {
 }
 
 var reClass = /class\s+(\S+)/m
+var reUse = /\/\/\s+use\:\s+(\S+)/mg
 
 function getDepModules(moduleConfig) {
 	var dep = { }
@@ -30,6 +31,10 @@ function getDepModules(moduleConfig) {
 
 	return dep
 }
+
+var gen_processModule = coroutine(function*(g) {
+
+})
 
 var gen_processPath = coroutine(function*(path, g) {
 
@@ -101,8 +106,47 @@ var gen_processPath = coroutine(function*(path, g) {
 
 			var lastClassName = null, classMap = []
 
+			var tsorder = [ ], tsdone = { }
+			
+			var fd_flag = true
+			while(fd_flag) {
+				fd_flag = false
+				for(var i1 = 0, l1 = ts.length; i1 < l1; i1++) {
+					var item = ts[i1]
+					if(item.done) continue
+
+					if(!item.dep) {
+						var tsc = '' + (yield fs.readFile(item.path, g.resume))
+						var a, dep = item.dep = [ ] 
+						reUse.lastIndex = 0
+						while(a = reUse.exec(tsc)) {
+							dep.push(a[1])
+						}
+					}
+
+					var all_dep = true
+					for(var i2 = 0, c2 = item.dep, l2 = c2.length; i2 < l2; i2++) {
+						var dep = c2[i2]
+						if(dep in tsdone) continue
+						all_dep = false
+						break
+					}
+
+					if(!all_dep) continue
+
+					item.done = true
+					tsdone[item.relative] = true
+					tsorder.push(item)
+
+					fd_flag = true
+				}
+			}
+
+			console.log(tsorder)
+
 			for(var i1 = 0, l1 = ts.length; i1 < l1; i1++) {
 				var item = ts[i1]
+				console.log('process ' + item.relative)
 
 				var filePath = config.data + '/' + moduleInfo.name + '/' + moduleInfo.version + '/' + item.relative
 				// console.log(filePath)
