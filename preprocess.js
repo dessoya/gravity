@@ -155,7 +155,7 @@ class Module {
 		yield utils.makePathForFile(filePath, g.resume)
 
 		var tsc = '' + (yield fs.readFile(item.path, g.resume))
-		tsc = 'module ' + self.name + '{\n' + tsc + '\n}'
+		tsc = 'module ' + self.name.replace(/\//g, '_') + ' {\n' + tsc + '\n}'
 		// make .d.ts refs
 		/// <reference path="/var/lib/gravity/modulePreprocess/pluginManager/3.0/Manager.d.ts" />
 		for(var dname in self.depModules) {
@@ -200,6 +200,9 @@ class Module {
 
 
 		var content = '' + (yield fs.readFile(js, g.resume)), a
+		yield fs.writeFile(js + '.original', content, g.resume)
+
+		// delete head /// refs
 		var lines = content.split('\n')
 		var res = [ ]
 		for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
@@ -215,7 +218,7 @@ class Module {
 		lines.shift(); lines.shift(); lines.pop(); lines.pop();
 		for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
 			var line = lines[i2]
-			if(line.indexOf(self.name + '.') !== -1) {
+			if(line.indexOf(self.name.replace(/\//g, '_') + '.') !== -1) {
 				continue
 			}
 			line = line.substr(4)
@@ -280,11 +283,15 @@ class Module {
 			yield self.processts(c[i], g.resume)
 		}
 
-		// create index.js
-		var index = 'module.exports = {\n' + self.classMap.join(',\n') + '\n}' // require("' + item.relative + '")'
-		var ip = config.data + '/' + self.name + '/' + self.version + '/index.js'
-		self.fileMap[ip.substr(config.data.length + 1)] = { }
-		yield fs.writeFile(ip, index, g.resume)
+		// check for native index.js
+		if( !(yield fs.exists(self.path + '/' + self.name + '/' + self.version + '/index.js', g.resumeWithError))[0] ) {
+			// create index.js
+			console.log('create ' + self.name + '/' + self.version + '/index.js')
+			var index = 'module.exports = {\n' + self.classMap.join(',\n') + '\n}' // require("' + item.relative + '")'
+			var ip = config.data + '/' + self.name + '/' + self.version + '/index.js'
+			self.fileMap[ip.substr(config.data.length + 1)] = { }
+			yield fs.writeFile(ip, index, g.resume)
+		}
 
 		self.setProcessed()
 		return true
