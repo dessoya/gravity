@@ -10,8 +10,6 @@ var coroutine		= require('coroutine')
   , utils			= require(glite_path + '/utils.js')
   , os				= require('os')
 
-// console.log(os.platform())
-
 var gen_main = coroutine(function*(g) {
 
     var mode = 'read_cmd', project_path = null, config_path = null

@@ -12,15 +12,15 @@ var coroutine		= require('coroutine')
   , os				= require('os')
 
 var config = {
-	data: '/var/lib/gravity/modulePreprocess',
-	ts: '/home/node4/node-v4.2.1-linux-x64/node_modules/.bin/tsc'
+	data: 	'/var/lib/gravity/modulePreprocess',
+	ts: 	'/home/node4/node-v4.2.1-linux-x64/node_modules/.bin/tsc'
 }
 
-var reClass = /class\s+(\S+)/m
-var reUse = /\/\/\s+use\:\s+(\S+)/mg
+var reClass		= /class\s+(\S+)/m
+var reUse		= /\/\/\s+use\:\s+(\S+)/mg
+var globalFileMap = { }
 
 function getDepModules(moduleConfig) {
-
 	var dep = { }
 
 	if(moduleConfig.use) {
@@ -73,15 +73,13 @@ var processedModules = { }
 class Module {
 
 	constructor(path, name, version) {
-		this.name = name
-		this.version = version
-		this.path = path
-
-		this.fileMap = { }
+		this.name		= name
+		this.version	= version
+		this.path		= path
+		this.fileMap	= { }
 	}
 
 	*readFiles(self, g) {
-
 		var files = yield utils.scan(self.path + '/' + self.name + '/' + self.version, g.resume)
 		var ts = self.ts = [ ]
 		for(var i1 = 0, l1 = files.length; i1 < l1; i1++) {
@@ -93,7 +91,6 @@ class Module {
 	}
 
 	setProcessed() {
-
 		if(!(this.name in processedModules)) {
 			processedModules[this.name] = { }
 		}
@@ -103,7 +100,6 @@ class Module {
 	}
 
 	checkDep() {
-
 		var alldep = true
 		for(var dname in this.depModules) {
 			if(!(dname in processedModules && this.depModules[dname] in processedModules[dname])) {
@@ -116,7 +112,6 @@ class Module {
 	}
 
 	static *tsIdemDepMaker(item, g) {
-
 		var dep = item.dep = [ ]
 
 		var a, tsc = '' + (yield fs.readFile(item.path, g.resume))
@@ -142,14 +137,9 @@ class Module {
 		if((yield fs.exists(dst, g.resumeWithError))[0]) {
 			var sdst = yield fs.stat(dst, g.resume)
 
-			// console.log(Math.floor(ssrc.mtime.getTime() / 1000))
-			// console.log(Math.floor(sdst.mtime.getTime() / 1000))
-
 			if(Math.floor(ssrc.mtime.getTime() / 1000) === Math.floor(sdst.mtime.getTime() / 1000)) {
-
 				var a, content = '' + (yield fs.readFile(js, g.resume))
 				if(a = reClass.exec(content)) {
-					// console.log(a)
 					var lastClassName = a[1]
 					self.classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
 				}
@@ -159,7 +149,6 @@ class Module {
 			}
 		}
 
-		// 
 		console.log('process ' + item.relative)
 
 		var filePath = config.data + '/' + self.name + '/' + self.version + '/' + item.relative
@@ -242,7 +231,6 @@ class Module {
 
 
 		if(a = reClass.exec(content)) {
-			// console.log(a)
 			var lastClassName = a[1]
 			self.classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
 			content += '\n\nmodule.exports = ' + a[1]
@@ -298,8 +286,6 @@ class Module {
 		self.fileMap[ip.substr(config.data.length + 1)] = { }
 		yield fs.writeFile(ip, index, g.resume)
 
-		// console.log(self.tsorder)
-
 		self.setProcessed()
 		return true
 	}
@@ -310,7 +296,6 @@ for(var i = 0, c = [ Module ], l = c.length; i < l; i ++)
 	utils.processGenerators(c[i])
 
 var gen_processPath = coroutine(function*(path, g) {
-
 	console.log('process modules in ' + path)
 
 	var list = JSON.parse('' + (yield fs.readFile(path + '/list.json', g.resume)))
@@ -334,14 +319,11 @@ var gen_processPath = coroutine(function*(path, g) {
 		}
 	}
 
-	// console.log(util.inspect(modulesList, {depth: null}))
-
-	var fileMap = { }	
 	for(var i = 0, l = modulesList.length; i < l; i++) {
 		var module = modulesList[i]
-		utils.mergeMaps(fileMap, module.fileMap)
+		utils.mergeMaps(globalFileMap, module.fileMap)
 	}
-	yield fs.writeFile(config.data + '/filesMap.json', JSON.stringify(fileMap), g.resume)
+	yield fs.writeFile(config.data + '/filesMap.json', JSON.stringify(globalFileMap), g.resume)
 
 })
 
@@ -350,7 +332,6 @@ var gen_main = coroutine(function*(g) {
     var mode = 'read_cmd', modules = [ ], config_path = null
 
     for(var i = 0, c = process.argv, l = c.length; i < l; i++) {
-
     	var item = c[i]
 
     	if('read_cmd' !== mode && '-' === item[0]) {
@@ -392,7 +373,6 @@ var gen_main = coroutine(function*(g) {
     		}
     	}
     }
-    // console.log(config)
 
     // -------------------------------------------------------
     for(var i = 0, l = modules.length; i < l; i++) {
@@ -407,4 +387,3 @@ gen_main(function(err, result) {
 		console.showError(err)
 	}
 })
-

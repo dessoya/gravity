@@ -187,8 +187,21 @@ function loadFile(file) {
 
 }
 
+var projectJSON = JSON.parse(loadFile('/project.json'));
+if(projectJSON.debug.preprocess) {
+	// document.write('preprocessing . . .<br>')
+	for(var i = 0, c = projectJSON.debug.preprocess, l = c.length; i < l; i++) {
+		var item = c[i];
+		// document.write(item + ' . . . ')
+		console.log('preprocess ' + item)
+		// document.write('done<br>')
+		loadFile(item)
+	}
+	// document.write('preprocess done<br>')	
+}
+
 preFileMap = JSON.parse(loadFile('/pre/filesMap.json'))
-console.log(preFileMap)
+// console.log(preFileMap);
 
 var repositories = JSON.parse(loadFile('/repositories/list.json'));
 var modules = window.modules = { }
@@ -253,7 +266,7 @@ function makeModulesMap(module_, list) {
 configModule = new Module('/', 'project.json');
 configModule.config = { };
 configModule.code = true;
-configModule.exports = JSON.parse(loadFile('/project.json')).config;
+configModule.exports = projectJSON.config;
 
 modules['config'] = { '1.0': configModule };
 
