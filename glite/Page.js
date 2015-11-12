@@ -236,7 +236,7 @@ var Page = Module.inherit({
 
 			// '--language_in=ECMASCRIPT6',
 			'--language_in=ECMASCRIPT6', '--language_out=ECMASCRIPT5',
-			'--formatting=pretty_print',
+			// '--formatting=pretty_print',
 
 			//'--transpile_only',
 			//'--externs', '/home/github_node_modules/gmr/modules/class/1.0/externs.js',

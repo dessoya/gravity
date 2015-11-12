@@ -1,0 +1,1 @@
+node ./glite.js -modules C:\zh\gravity-modules-ts C:\zh\space-craft-client\modules -pages C:\zh\space-craft-client\pages\index -project C:\zh\space-craft-client\project.json

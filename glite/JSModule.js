@@ -6,7 +6,8 @@ var Class			= require('class')
   , utils			= require(glite_path + '/utils.js')
   , util			= require('util')
 
-var prePath = '/var/lib/gravity/modulePreprocess'
+// var prePath = '/var/lib/gravity/modulePreprocess'
+var prePath = 'c:\\zh\\var\\gravity\\post-process-data'
 
 var JSModule = Class.inherit({
 
