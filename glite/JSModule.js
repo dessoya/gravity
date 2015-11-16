@@ -22,6 +22,8 @@ var JSModule = Class.inherit({
 
     s_processFiles: function(files) {
 
+        // console.log(files)
+
         var f = this.jsModule.files ? this.jsModule.files : {}
 		var f2 = utils.arrayToMap(files, function(item) {
 			if(item.wc != 'js') {
@@ -31,14 +33,18 @@ var JSModule = Class.inherit({
 		})
 
 		this.jsModule.files = utils.mergeMaps(f, f2)
-		console.log(this.jsModule.files)
 
-		this.jsModule.html = utils.arrayToMap(files, function(item) {
+		// console.log(this.jsModule.files)
+
+        f = this.jsModule.html ? this.jsModule.html : {}
+		f2 = utils.arrayToMap(files, function(item) {
 			if(item.wc != 'html') {
 				return null
 			}
 			return item.relative
 		})
+
+		this.jsModule.html = utils.mergeMaps(f, f2)
     },
 
     processFiles: coroutine.method(function*(module, g) {

@@ -14,13 +14,15 @@ var CSSModule = Class.inherit({
 
     s_processFiles: function(files) {
 
-		this.cssModule.files = utils.arrayToMap(files, function(item) {
+        var f = this.cssModule.files ? this.cssModule.files : {}
+		var f2 = utils.arrayToMap(files, function(item) {
 			if(item.wc != 'css') {
 				return null
 			}
 			return item.relative
 		})
 
+		this.cssModule.files = utils.mergeMaps(f, f2)
     },
 /*
     processFiles: coroutine.method(function*(module, g) {

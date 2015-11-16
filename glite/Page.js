@@ -75,6 +75,10 @@ var Page = Module.inherit({
 
 			// templates
 
+			var uses = yield module.getUsesModules(g.resume)
+
+			console.log('module ' + module.name)
+			console.log(module.jsModule.html)
 			for(var n1 in module.jsModule.html) {
 			
 				var item = module.jsModule.html[n1]
@@ -100,7 +104,6 @@ var Page = Module.inherit({
 
 			
 			
-			var uses = yield module.getUsesModules(g.resume)
 			var u = [ ]
 			for(var i1 in uses) {
 				u.push(uses[i1].name + '|' + uses[i1].version)
@@ -125,7 +128,7 @@ var Page = Module.inherit({
 				jsdeps[item.relative] = { }
 				s = '' + (yield fs.readFile(item.path, g.resume))
 
-				var a, reRquire = /require\(['"](.+\.(?:js|ts))['"]\)/, reqs = jsdeps[item.relative].reqs = [ ]
+				var a, reRquire = /require\(['"]([a-zA-Z\d_]+?\.(?:js|ts))['"]\)/, reqs = jsdeps[item.relative].reqs = [ ]
 				while(a = reRquire.exec(s)) {
 
 				    var t1 = a[1]
