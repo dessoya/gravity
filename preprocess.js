@@ -16,6 +16,8 @@ var config = {
 	ts: 	'/home/node4/node-v4.2.1-linux-x64/node_modules/.bin/tsc'
 }
 
+// console.log(process.env)
+
 var reClass		= /class\s+(\S+)/m
 var reUse		= /\/\/\s+use\:\s+(\S+)/mg
 var globalFileMap = { }
@@ -155,7 +157,7 @@ class Module {
 		yield utils.makePathForFile(filePath, g.resume)
 
 		var tsc = '' + (yield fs.readFile(item.path, g.resume))
-		tsc = 'module ' + self.name.replace(/\//g, '_') + ' {\n' + tsc + '\n}'
+		tsc = 'module ' + self.name.replace(/\//g, '_') + ' {\ndeclare function require(m: string): any;\n' + tsc + '\n}'
 		// make .d.ts refs
 		/// <reference path="/var/lib/gravity/modulePreprocess/pluginManager/3.0/Manager.d.ts" />
 		for(var dname in self.depModules) {
@@ -217,9 +219,16 @@ class Module {
         res = [ ]
 		lines.shift(); lines.shift(); lines.pop(); lines.pop();
 		for(var i2 = 0, l2 = lines.length; i2 < l2; i2++) {
-			var line = lines[i2]
-			if(line.indexOf(self.name.replace(/\//g, '_') + '.') !== -1) {
-				continue
+			var line = lines[i2], p
+			if( (p = line.indexOf(self.name.replace(/\//g, '_') + '.')) !== -1 || (p = line.indexOf(self.name.replace(/\//g, '_') + '_1.')) !== -1) {
+				var str = line.substr(0, p)
+				if(/^\s*$/.test(str)) {
+					continue
+				}
+				else {
+					// remove namespace\module name
+					line = line.replace(new RegExp(self.name.replace(/\//g, '_') + '_1\\.', 'g'), '')
+				}
 			}
 			line = line.substr(4)
 			res.push(line)
@@ -228,8 +237,19 @@ class Module {
 
 		content = '\n' + content
 
+		var rstr = [ ]
 		for(var dname in self.depModules) {
-			content = 'var '+dname+' = require("'+dname+'")\n' + content
+			// content = 'var '+dname.replace(/\//g, '_')+' = require("'+dname+'")\n' + content
+			rstr.push( dname.replace(/\//g, '_')+' = require("' + dname + '")' )
+		}
+
+		for(var i = 0, c = item.dep, l = c.length; i < l; i++) {
+			var d = c[i]
+			rstr.push( d.substr(0, d.length - 3) + ' = require("' + d + '")' )
+		}
+
+		if(rstr.length) {
+			content = 'var ' + rstr.join(',') + ';\n' + content
 		}
 
 
@@ -350,8 +370,6 @@ var gen_main = coroutine(function*(g) {
 
     		switch(item) {
     		case '-modules':
-    			mode = item
-	    		break
     		case '-config':
     			mode = item
 	    		break
@@ -370,6 +388,7 @@ var gen_main = coroutine(function*(g) {
 
     if(config_path) {
     	var c = JSON.parse('' + (yield fs.readFile(__dirname + '/' + config_path, g.resume)))
+    	c = c.versions[process.env[c.env]]
     	var m = {
     		tsc: 'ts',
 			'post-process-data': 'data'

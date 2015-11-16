@@ -1,0 +1,9 @@
+{
+    "env": "SPACE_CRAFT_VERSION",
+	"versions": {
+		"work": {
+			"tsc": "C:\\Program Files\\nodejs\\node_modules\\.bin\\tsc.cmd",
+			"post-process-data": "c:\\zh\\var\\gravity\\post-process-data"
+		}
+	}
+}

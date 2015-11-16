@@ -7,8 +7,6 @@ var Class			= require('class')
   , util			= require('util')
 
 // var prePath = '/var/lib/gravity/modulePreprocess'
-var prePath = 'c:\\zh\\var\\gravity\\post-process-data'
-
 var JSModule = Class.inherit({
 
 /*
@@ -49,7 +47,7 @@ var JSModule = Class.inherit({
 		module.super('s_processFiles', files)
 
 		if(module.name.indexOf('|') === -1) {
-			var p = prePath + '/' + module.name + '/' + module.version
+			var p = JSModule.prePath + '/' + module.name + '/' + module.version
 			var files = yield utils.scan(p, g.resume)
 			module.super('s_processFiles', files)
 			// console.log(p)
@@ -78,5 +76,8 @@ var JSModule = Class.inherit({
 	*/
 
 })
+
+JSModule.prePath = 'c:\\zh\\var\\gravity\\post-process-data'
+
 
 module.exports = JSModule

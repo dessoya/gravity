@@ -11,6 +11,8 @@ var coroutine		= require('coroutine')
   , Page			= require('./glite/Page.js')
   , ModuleManager	= require('./glite/ModuleManager.js')
 
+  , JSModule		= require('./glite/JSModule.js')
+
 var gen_main = coroutine(function*(g) {
 
     // read modules path
@@ -19,7 +21,7 @@ var gen_main = coroutine(function*(g) {
 
     ModuleManager.path = [ ]
 
-    var mode = 'read_cmd', pages = [ ], project_path = null, pageName = 'index'
+    var mode = 'read_cmd', pages = [ ], project_path = null, pageName = 'index', config_path = null
 
     for(var i = 0, c = process.argv, l = c.length; i < l; i++) {
 
@@ -34,32 +36,41 @@ var gen_main = coroutine(function*(g) {
 
     		switch(item) {
     		case '-modules':
-    			mode = 'modules'
-	    		break
     		case '-pages':
-    			mode = 'pages'
-	    		break
     		case '-project':
-    			mode = 'project'
-	    		break
+    		case '-config':
+    			mode = item
 			}
 			break
 
-    	case 'modules':
+    	case '-modules':
     		ModuleManager.path.push(item)
     		break
 
-    	case 'pages':
+    	case '-pages':
     		pages.push(item)
     		break
 
-    	case 'project':
+    	case '-project':
     		project_path = item
     		break
+
+    	case '-config':
+    		config_path = item
+    		break
+
     	}
     }
 
     // ModuleManager.path = [ '/home/github_node_modules/gmr/modules' ]
+    if(config_path) {
+    	var c = JSON.parse('' + (yield fs.readFile(__dirname + '/' + config_path, g.resume)))
+    	c = c.versions[process.env[c.env]]
+
+    	if(c['post-process-data']) {
+    		JSModule.prePath = c['post-process-data']
+    	}
+	}
 
 	console.log('Modules: ' + ModuleManager.path.join(','))
 	var projectConfig = JSON.parse('' + (yield fs.readFile(project_path, g.resume))).config
