@@ -50,6 +50,7 @@ var gen_main = coroutine(function*(g) {
 
     if(config_path) {
     	var c = JSON.parse('' + (yield fs.readFile(__dirname + '/' + config_path, g.resume)))
+    	c = c.versions[process.env[c.env]]
     	var m = {
 			'post-process-data': 'post-process-data'
     	}

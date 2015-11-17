@@ -227,7 +227,7 @@ class Module {
 				}
 				else {
 					// remove namespace\module name
-					line = line.replace(new RegExp(self.name.replace(/\//g, '_') + '_1\\.', 'g'), '')
+					line = line.replace(new RegExp(self.name.replace(/\//g, '_') + '(?:_1)?\\.', 'g'), '')
 				}
 			}
 			line = line.substr(4)
