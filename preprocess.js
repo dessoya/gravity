@@ -17,6 +17,72 @@ var config = {
 }
 
 // console.log(process.env)
+var old = console.log
+class SmartLogger {
+	// some dirty magic
+	constructor() {
+
+		this.groups = { }
+		this.last = null
+
+		var l = this.log.bind(this) 
+		l.setTopGroup = this.setTopGroup.bind(this)
+		l.setGroup = this.setGroup.bind(this)
+		l.drawGroups = this.drawGroups.bind(this)
+		l.goTop = this.goTop.bind(this)
+		return l
+	}
+
+	setTopGroup(name) {
+
+		if(!(name in this.groups)) {
+			this.groups[name] = { name: name }
+		}
+
+		this.last = this.groups[name]
+
+	}
+
+	setGroup(name) {
+		this.last[name] = { top: this.last, name: name }
+		this.last = this.last[name]
+	}
+
+	goTop() {
+		this.last = this.last.top
+	}
+
+	drawGroups() {
+		var t = this.last, p = [ ]
+		do {
+			p.unshift(t)
+			t = t.top
+		}
+		while(t)
+
+		// old(p)
+		
+		for(var i = 0, l = p.length; i < l; i ++) {
+			var item = p[i]
+			if(!item) continue
+			if(!item.drawed) {
+				item.drawed = true
+				old(item.name)
+			}
+		}
+	}
+
+	log() {
+	}
+
+}
+
+var log = new SmartLogger
+console.log = function() {
+	log.drawGroups()
+	old.apply(old, arguments)
+}
+// log()
 
 var reClass		= /class\s+(\S+)/m
 var reUse		= /\/\/\s+use\:\s+(\S+)/mg
@@ -146,7 +212,7 @@ class Module {
 					self.classMap.push( '\t' + lastClassName + ': require("' + item.relative + '")' )
 				}
 
-				console.log('skip ' + item.relative + ' not modified')
+				// console.log('skip ' + item.relative + ' not modified')
 				return
 			}
 		}
@@ -180,8 +246,6 @@ class Module {
 		}
 
 		yield fs.writeFile(filePath, tsc, g.resume)
-		yield fs.utimes(filePath, Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
-
 
 
 		// make .d.ts
@@ -191,6 +255,11 @@ class Module {
 		var r = yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '-d', '--out', dts ], g.resume)
 		if(r[0].length) console.log('stdout\n', r[0])
 		if(r[1].length) console.log('stderr\n', r[1])
+
+		if(r[0].length === 0) {
+			yield fs.utimes(filePath, Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
+		}
+
 
 		// make .js
 
@@ -296,7 +365,7 @@ class Module {
 				g.resume)
 		}
 
-		console.log('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
+		log.setGroup('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
 
 		self.classMap = [ ]
 		for(var i = 0, c = self.tsorder, l = c.length; i < l; i++) {
@@ -306,7 +375,7 @@ class Module {
 		// check for native index.js
 		if( !(yield fs.exists(self.path + '/' + self.name + '/' + self.version + '/index.js', g.resumeWithError))[0] ) {
 			// create index.js
-			console.log('create ' + self.name + '/' + self.version + '/index.js')
+			// console.log('create ' + self.name + '/' + self.version + '/index.js')
 			var index = 'module.exports = {\n' + self.classMap.join(',\n') + '\n}' // require("' + item.relative + '")'
 			var ip = config.data + '/' + self.name + '/' + self.version + '/index.js'
 			self.fileMap[ip.substr(config.data.length + 1)] = { }
@@ -314,6 +383,7 @@ class Module {
 		}
 
 		self.setProcessed()
+		log.goTop()
 		return true
 	}
 
@@ -323,7 +393,9 @@ for(var i = 0, c = [ Module ], l = c.length; i < l; i ++)
 	utils.processGenerators(c[i])
 
 var gen_processPath = coroutine(function*(path, g) {
-	console.log('process modules in ' + path)
+
+	log.setTopGroup('process modules in ' + path)
+	// console.log('process modules in ' + path)
 
 	var list = JSON.parse('' + (yield fs.readFile(path + '/list.json', g.resume)))
 	var modulesList = [ ]
