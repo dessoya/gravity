@@ -1,0 +1,1 @@
+node ./glite.js -config config.json -modules C:\zh\gravity-modules-ts C:\zh\control-panel-client\modules -pages C:\zh\control-panel-client\pages\index -project C:\zh\control-panel-client\project.json
