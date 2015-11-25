@@ -16,6 +16,12 @@ var config = {
 	ts: 	'/home/node4/node-v4.2.1-linux-x64/node_modules/.bin/tsc'
 }
 
+/*
+
+ imports: -> import AJAX = Net_AJAX.AJAX
+
+ */
+
 // console.log(process.env)
 var old = console.log
 class SmartLogger {
@@ -86,6 +92,7 @@ console.log = function() {
 
 var reClass		= /class\s+(\S+)/m
 var reUse		= /\/\/\s+use\:\s+(\S+)/mg
+var reAlias		= /\/\/\s+alias\:\s+(\S+)/mg
 var globalFileMap = { }
 
 function getDepModules(moduleConfig) {
@@ -223,7 +230,29 @@ class Module {
 		yield utils.makePathForFile(filePath, g.resume)
 
 		var tsc = '' + (yield fs.readFile(item.path, g.resume))
-		tsc = 'module ' + self.name.replace(/\//g, '_') + ' {\ndeclare function require(m: string): any;\n' + tsc + '\n}'
+
+		var lines = tsc.split('\n')
+
+		var alias_lines = []
+		for(var i = 0, l = lines.length; i < l; i++) {
+			var line = lines[i], a
+
+			// check alias
+			if(a = reAlias.exec(line)) {
+				alias_lines.push(a[1], self.name.replace(/\//g, '_') + '.' + a[1])
+			}
+
+		}
+
+		tsc = lines.join('\n')
+
+		var refs = [ ]
+		var misc = [ ]
+		var aliases = [ ]
+
+		misc.push('declare function require(m: string): any')
+		misc.push('var config = require("config")')
+
 		// make .d.ts refs
 		/// <reference path="/var/lib/gravity/modulePreprocess/pluginManager/3.0/Manager.d.ts" />
 		for(var dname in self.depModules) {
@@ -233,17 +262,28 @@ class Module {
 			// console.log(dfiles)
 			for(var i10 = 0, l10 = dfiles.length; i10 < l10; i10++) {
 				var ditem = dfiles[i10]
-				if(ditem.path.substr(-5) !== '.d.ts') continue
-				// console.log(ditem.path)
-				tsc = '/// <reference path="' + ditem.path + '" />\n' + tsc
+				if(ditem.path.substr(-5) === '.d.ts') {
+					// console.log(ditem.path)
+					refs.push('/// <reference path="' + ditem.path + '" />')
+				}
+				else if(ditem.path.substr(-4) === '.imp') {
+					let cnt = '' + (yield fs.readFile(ditem.path, g.resume))
+					aliases = aliases.concat(cnt.split(', '))
+				}
 			}
 		}
 
 		for(var i = 0, c = item.dep, l = c.length; i < l; i++) {			
 			var f = c[i]
 			f = f.substr(0, f.length - 2) + 'd.ts'
-			tsc = '/// <reference path="./' + f + '" />\n' + tsc
+			refs.push('/// <reference path="./' + f + '" />')
 		}
+
+		if(aliases.length > 0) {
+			misc.push('var ' + aliases.join(','))
+		}
+
+		tsc = refs.join('\n') + '\nmodule ' + self.name.replace(/\//g, '_') + ' {\n' + misc.join('\n') + '\n' + tsc + '\n}'
 
 		yield fs.writeFile(filePath, tsc, g.resume)
 
@@ -255,6 +295,22 @@ class Module {
 		var r = yield utils.classicExec(config.ts, [ '-t', 'ES6', filePath, '-d', '--out', dts ], g.resume)
 		if(r[0].length) console.log('stdout\n', r[0])
 		if(r[1].length) console.log('stderr\n', r[1])
+
+		if(alias_lines.length > 0) {
+			// add aliases imports lines
+			let dts_content = '' + (yield fs.readFile(dts, g.resume)), a = []
+
+			for(var i = 0, l = alias_lines.length; i < l; i += 2) {
+				let cls = alias_lines[i], srccls = alias_lines[i + 1]
+				a.push(cls + ' = ' + srccls)
+				dts_content += '\nimport ' + cls + ' = ' + srccls
+			}
+
+			yield fs.writeFile(dts, dts_content, g.resume)
+
+			let imp = dts.substr(0, dts.length - 4) + 'imp'
+			yield fs.writeFile(imp, a.join(', '), g.resume)
+		}
 
 		if(r[0].length === 0) {
 			yield fs.utimes(filePath, Math.floor(ssrc.mtime.getTime() / 1000), Math.floor(ssrc.mtime.getTime() / 1000), g.resume)
