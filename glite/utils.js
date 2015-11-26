@@ -5,6 +5,16 @@ var coroutine		= require('coroutine')
   , spawn			= require('child_process').spawn
   , os				= require('os')
 
+var sep
+
+if (os.platform() === 'win32') {
+	sep = '\\'
+}
+else {
+	sep = '/'
+}
+
+
 var get_makePathForFile = coroutine(function*(filepath, g) {
 
     var items, p, d
@@ -182,4 +192,5 @@ module.exports = {
 	mergeMaps:			mergeMaps,
 
 	processGenerators:  processGenerators,
+	sep: sep
 }

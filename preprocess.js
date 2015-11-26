@@ -234,12 +234,13 @@ class Module {
 		var lines = tsc.split('\n')
 
 		var alias_lines = []
+		var clsName = item.relative.substr(0, item.relative.length - 3)
 		for(var i = 0, l = lines.length; i < l; i++) {
 			var line = lines[i], a
 
 			// check alias
 			if(a = reAlias.exec(line)) {
-				alias_lines.push(a[1], self.name.replace(/\//g, '_') + '.' + a[1])
+				alias_lines.push(a[1], self.name.replace(/\//g, '_') + '.' + clsName)
 			}
 
 		}
@@ -393,6 +394,14 @@ class Module {
 			return false
 		}
 
+		if(!self.prepathscanned) {
+			self.prepathscanned = true
+			let prepath = config.data + '/' + self.name + '/' + self.version
+			if(!(yield fs.exists(prepath, g.resumeWithError))[0]) {
+				yield utils.makePathForFile(prepath + utils.sep + 'info.txt', g.resume)
+			}
+		}
+
 		if(!self.ts) {
 			yield self.readFiles(g.resume)
 		}
@@ -420,6 +429,7 @@ class Module {
 				},
 				g.resume)
 		}
+
 
 		log.setGroup('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
 
