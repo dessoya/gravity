@@ -23,7 +23,14 @@ var config = {
  */
 
 // console.log(process.env)
-var old = console.log
+// var old = console.log
+var old = function(a) {
+	if('string' !== typeof a) {
+		a = util.inspect(a,{depth:null})
+	}
+	process.stdout.write(a)
+}
+
 class SmartLogger {
 	// some dirty magic
 	constructor() {
@@ -112,6 +119,7 @@ function getDepModules(moduleConfig) {
 var gen_makeOrder = coroutine(function*(list, gen_makeDep, itemKeyMaker, g) {
 
 	var order = [ ], done = { }, flag = true
+	console.log(list)
 	while(flag) {
 		flag = false
 		for(var i1 = 0, l1 = list.length; i1 < l1; i1++) {
@@ -130,13 +138,15 @@ var gen_makeOrder = coroutine(function*(list, gen_makeDep, itemKeyMaker, g) {
 				break
 			}
 
-			if(!all_dep) continue
+			if(!all_dep) {
+				flag = true
+				continue
+			}
 
 			item.done = true
 			done[itemKeyMaker(item)] = true
 			order.push(item)
 
-			flag = true
 		}
 	}
 
@@ -432,6 +442,7 @@ class Module {
 
 
 		log.setGroup('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
+		console.log(self)
 
 		self.classMap = [ ]
 		for(var i = 0, c = self.tsorder, l = c.length; i < l; i++) {
