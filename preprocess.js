@@ -24,11 +24,16 @@ var config = {
 
 // console.log(process.env)
 // var old = console.log
-var old = function(a) {
-	if('string' !== typeof a) {
-		a = util.inspect(a,{depth:null})
+var old = function() {
+
+	for(var i = 0, l = arguments.length; i < l; i++) {
+		var a = arguments[i]
+		if('string' !== typeof a) {
+			a = util.inspect(a,{depth:null}) + '\n'
+		}
+		process.stdout.write(a)
 	}
-	process.stdout.write(a)
+	process.stdout.write('\n')
 }
 
 class SmartLogger {
@@ -119,9 +124,12 @@ function getDepModules(moduleConfig) {
 var gen_makeOrder = coroutine(function*(list, gen_makeDep, itemKeyMaker, g) {
 
 	var order = [ ], done = { }, flag = true
-	console.log(list)
+
+	// console.log(list)
+
 	while(flag) {
 		flag = false
+		// console.log(list)
 		for(var i1 = 0, l1 = list.length; i1 < l1; i1++) {
 			var item = list[i1]
 			if(item.done) continue
@@ -149,6 +157,8 @@ var gen_makeOrder = coroutine(function*(list, gen_makeDep, itemKeyMaker, g) {
 
 		}
 	}
+
+	// console.log('done')
 
 	return order
 })
@@ -442,7 +452,7 @@ class Module {
 
 
 		log.setGroup('\n-----\nprocess module ' + self.name + ' ' + self.version + '\n-----\n')
-		console.log(self)
+		// console.log(self)
 
 		self.classMap = [ ]
 		for(var i = 0, c = self.tsorder, l = c.length; i < l; i++) {
