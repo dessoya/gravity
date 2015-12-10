@@ -191,7 +191,7 @@ function readTokens(text) {
 				}
 				else if(a[5]) {
 				    var t = Tokens.If.create(a[5])
-				    console.log(t)
+				    // console.log(t)
 					tokens.push(t)
 				}
 				else if(a[6] && a[6] !== 'index') {
